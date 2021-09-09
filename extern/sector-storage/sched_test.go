@@ -616,7 +616,7 @@ func TestWindowCompact(t *testing.T) {
 						taskType: task,
 						sector:   storage.SectorRef{ProofType: spt},
 					})
-					window.allocated.add(wh.info.Resources, ResourceTable[task][spt])
+					window.allocated.add(wh.info.Resources, ResourceTable[task][spt], task)
 				}
 
 				wh.activeWindows = append(wh.activeWindows, window)
@@ -635,7 +635,7 @@ func TestWindowCompact(t *testing.T) {
 
 				for ti, task := range tasks {
 					require.Equal(t, task, wh.activeWindows[wi].todo[ti].taskType, "%d, %d", wi, ti)
-					expectRes.add(wh.info.Resources, ResourceTable[task][spt])
+					expectRes.add(wh.info.Resources, ResourceTable[task][spt], task)
 				}
 
 				require.Equal(t, expectRes.cpuUse, wh.activeWindows[wi].allocated.cpuUse, "%d", wi)

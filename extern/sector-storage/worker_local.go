@@ -34,6 +34,9 @@ type WorkerConfig struct {
 	TaskTypes []sealtasks.TaskType
 	NoSwap    bool
 
+	MaxPc1Task int
+	WorkerName string
+
 	// IgnoreResourceFiltering enables task distribution to happen on this
 	// worker regardless of its currently available resources. Used in testing
 	// with the local worker.
@@ -51,6 +54,8 @@ type LocalWorker struct {
 	executor   ExecutorFunc
 	noSwap     bool
 
+	pc1Limit   int
+	workerName string
 	// see equivalent field on WorkerConfig.
 	ignoreResources bool
 
@@ -82,6 +87,8 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, store stores.Store
 		acceptTasks:     acceptTasks,
 		executor:        executor,
 		noSwap:          wcfg.NoSwap,
+		pc1Limit:        wcfg.MaxPc1Task,
+		workerName:      wcfg.WorkerName,
 		ignoreResources: wcfg.IgnoreResourceFiltering,
 		session:         uuid.New(),
 		closing:         make(chan struct{}),
@@ -483,9 +490,12 @@ func (l *LocalWorker) Paths(ctx context.Context) ([]stores.StoragePath, error) {
 }
 
 func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
-	hostname, err := os.Hostname() // TODO: allow overriding from config
-	if err != nil {
-		panic(err)
+	if l.workerName == "" {
+		hostname, err := os.Hostname() // TODO: allow overriding from config
+		if err != nil {
+			panic(err)
+		}
+		l.workerName = hostname
 	}
 
 	gpus, err := ffi.GetGPUDevices()
@@ -509,7 +519,9 @@ func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 	}
 
 	return storiface.WorkerInfo{
-		Hostname:        hostname,
+		Hostname:        l.workerName,
+		MaxPc1Task:      l.pc1Limit,
+		TasksEnabled:    l.acceptTasks,
 		IgnoreResources: l.ignoreResources,
 		Resources: storiface.WorkerResources{
 			MemPhysical: mem.Total,

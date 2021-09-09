@@ -3,22 +3,23 @@ package sectorstorage
 import (
 	"sync"
 
+	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
 	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
 )
 
-func (a *activeResources) withResources(id WorkerID, wr storiface.WorkerInfo, r Resources, locker sync.Locker, cb func() error) error {
-	for !a.canHandleRequest(r, id, "withResources", wr) {
+func (a *activeResources) withResources(id WorkerID, wr storiface.WorkerInfo, r Resources, locker sync.Locker, tt sealtasks.TaskType, cb func() error) error {
+	for !a.canHandleRequest(r, id, "withResources", wr, tt) {
 		if a.cond == nil {
 			a.cond = sync.NewCond(locker)
 		}
 		a.cond.Wait()
 	}
 
-	a.add(wr.Resources, r)
+	a.add(wr.Resources, r, tt)
 
 	err := cb()
 
-	a.free(wr.Resources, r)
+	a.free(wr.Resources, r, tt)
 	if a.cond != nil {
 		a.cond.Broadcast()
 	}
@@ -26,32 +27,46 @@ func (a *activeResources) withResources(id WorkerID, wr storiface.WorkerInfo, r 
 	return err
 }
 
-func (a *activeResources) add(wr storiface.WorkerResources, r Resources) {
+func (a *activeResources) add(wr storiface.WorkerResources, r Resources, tt sealtasks.TaskType) {
 	if r.CanGPU {
 		a.gpuUsed = true
 	}
 	a.cpuUse += r.Threads(wr.CPUs)
 	a.memUsedMin += r.MinMemory
 	a.memUsedMax += r.MaxMemory
+	_, ok := a.assignedTasks[tt]
+	if !ok {
+		a.assignedTasks = make(map[sealtasks.TaskType]int)
+	}
+	a.assignedTasks[tt] += 1
 }
 
-func (a *activeResources) free(wr storiface.WorkerResources, r Resources) {
+func (a *activeResources) free(wr storiface.WorkerResources, r Resources, tt sealtasks.TaskType) {
 	if r.CanGPU {
 		a.gpuUsed = false
 	}
 	a.cpuUse -= r.Threads(wr.CPUs)
 	a.memUsedMin -= r.MinMemory
 	a.memUsedMax -= r.MaxMemory
+	_, ok := a.assignedTasks[tt]
+	if ok && a.assignedTasks[tt] > 0 {
+		a.assignedTasks[tt]--
+	}
 }
 
 // canHandleRequest evaluates if the worker has enough available resources to
 // handle the request.
-func (a *activeResources) canHandleRequest(needRes Resources, wid WorkerID, caller string, info storiface.WorkerInfo) bool {
+func (a *activeResources) canHandleRequest(needRes Resources, wid WorkerID, caller string, info storiface.WorkerInfo, tt sealtasks.TaskType) bool {
 	if info.IgnoreResources {
 		// shortcircuit; if this worker is ignoring resources, it can always handle the request.
 		return true
 	}
 
+	// Add logic to limit task in worker, currently only needed for PC1
+	if tt == sealtasks.TTPreCommit1 && a.assignedTasks[tt] >= info.MaxPc1Task {
+		log.Debugf("sched: Max PC1 limited (%d) reached for worker %s.", info.MaxPc1Task, wid)
+		return false
+	}
 	res := info.Resources
 	// TODO: dedupe needRes.BaseMinMemory per task type (don't add if that task is already running)
 	minNeedMem := res.MemReserved + a.memUsedMin + needRes.MinMemory + needRes.BaseMinMemory

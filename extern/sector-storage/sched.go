@@ -112,12 +112,12 @@ type workerDisableReq struct {
 }
 
 type activeResources struct {
-	memUsedMin uint64
-	memUsedMax uint64
-	gpuUsed    bool
-	cpuUse     uint64
-
-	cond *sync.Cond
+	memUsedMin    uint64
+	memUsedMax    uint64
+	gpuUsed       bool
+	cpuUse        uint64
+	assignedTasks map[sealtasks.TaskType]int
+	cond          *sync.Cond
 }
 
 type workerRequest struct {
@@ -391,9 +391,10 @@ func (sh *scheduler) trySched() {
 					log.Debugw("skipping disabled worker", "worker", windowRequest.worker)
 					continue
 				}
+				//wt := sh.workTracker
 
 				// TODO: allow bigger windows
-				if !windows[wnd].allocated.canHandleRequest(needRes, windowRequest.worker, "schedAcceptable", worker.info) {
+				if !windows[wnd].allocated.canHandleRequest(needRes, windowRequest.worker, "schedAcceptable", worker.info, task.taskType) {
 					continue
 				}
 
@@ -465,13 +466,13 @@ func (sh *scheduler) trySched() {
 			log.Debugf("SCHED try assign sqi:%d sector %d to window %d", sqi, task.sector.ID.Number, wnd)
 
 			// TODO: allow bigger windows
-			if !windows[wnd].allocated.canHandleRequest(needRes, wid, "schedAssign", info) {
+			if !windows[wnd].allocated.canHandleRequest(needRes, wid, "schedAssign", info, task.taskType) {
 				continue
 			}
 
 			log.Debugf("SCHED ASSIGNED sqi:%d sector %d task %s to window %d", sqi, task.sector.ID.Number, task.taskType, wnd)
 
-			windows[wnd].allocated.add(info.Resources, needRes)
+			windows[wnd].allocated.add(info.Resources, needRes, task.taskType)
 			// TODO: We probably want to re-sort acceptableWindows here based on new
 			//  workerHandle.utilization + windows[wnd].allocated.utilization (workerHandle.utilization is used in all
 			//  task selectors, but not in the same way, so need to figure out how to do that in a non-O(n^2 way), and
