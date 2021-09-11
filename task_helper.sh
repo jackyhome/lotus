@@ -16,15 +16,15 @@ function start_check() {
         p2_count=`find ${LOTUS_WORKER_PATH}/cache -name ${fn_check_p2} |wc -l`
         p1_running_count=$(expr ${p1_count} - ${p2_count})
 
-        if [[ ${pre_pc1_num} == 0 ]]
+        if [[ ${pre_pc1_num} -eq 0 ]]
         then
-            pre_pc1_num = p1_running_count
+            pre_pc1_num=$p1_running_count
         fi
 
-        if [[ ${pre_pc1_num} < ${p1_running_count} ]]
+        if [[ ${pre_pc1_num} -lt ${p1_running_count} ]]
         then
             lotus-worker tasks disable PC1
-            pre_pc1_num = p1_running_count
+            pre_pc1_num=$p1_running_count
             echo "New PC1 running count: ${pre_pc1_num}, wait for ${disableWaiteRound} round..." >> ${logFile}
             sleep $((checkTimer * disableWaiteRound))m
             if [[ ${p1_running_count} -lt ${pc1_limit} ]]
