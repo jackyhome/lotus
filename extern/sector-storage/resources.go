@@ -39,6 +39,12 @@ func (r Resources) Threads(wcpus uint64) uint64 {
 			return wcpus
 		}
 		return n
+	} else if r.MaxParallelism > 1000 {
+		n := (wcpus * uint64(r.MaxParallelism)) / (10000)
+		if n == 0 {
+			return wcpus
+		}
+		return n
 	}
 
 	return uint64(r.MaxParallelism)
@@ -134,7 +140,7 @@ var ResourceTable = map[sealtasks.TaskType]map[abi.RegisteredSealProof]Resources
 			MaxMemory: 30 << 30,
 			MinMemory: 30 << 30,
 
-			MaxParallelism: 44,
+			MaxParallelism: 7000, //use percentage number * 100, Value should not less than 1000 here.
 			CanGPU:         true,
 
 			BaseMinMemory: 1 << 30,
@@ -143,7 +149,7 @@ var ResourceTable = map[sealtasks.TaskType]map[abi.RegisteredSealProof]Resources
 			MaxMemory: 15 << 30,
 			MinMemory: 15 << 30,
 
-			MaxParallelism: 44,
+			MaxParallelism: 7000, //use percentage number * 100, Value should not less than 1000 here.
 			CanGPU:         true,
 
 			BaseMinMemory: 1 << 30,
