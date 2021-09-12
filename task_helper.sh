@@ -21,7 +21,7 @@ function start_check() {
         do
             inPreArray=$(echo ${pre_pc1_array[@]} | grep -o "$sectorId" | wc -w)
             if [ $inPreArray -eq 0 ] ; then
-                echo "Found new Sector: $sectorId, task will be disabled for ${disableWaiteRound} round..." >> ${logFile}
+                echo "发现新扇区: $sectorId, PC1暂停${disableWaiteRound}轮..." >> ${logFile}
                 pre_pc1_array=$cur_pc1_array
                 lotus-worker tasks disable PC1
                 sleep $((checkTimer * disableWaiteRound))m
@@ -29,20 +29,20 @@ function start_check() {
             fi
         done
 
-        echo "[PC1] running count: ${p1_running_count}, [PC2] running count: ${p2_count}" >> ${logFile}
+        echo "[PC1] 当前数量: ${p1_running_count}, [PC2] 当前数量: ${p2_count}" >> ${logFile}
 
         if [[ ${taskList} =~ "PC1" ]]
         then
             if [ ${p1_running_count} -ge ${pc1_limit} ]
             then
                 lotus-worker tasks disable PC1
-                echo "PC1 disabled! Will sleep for $((checkTimer * disableWaiteRound)) minutes" >> ${logFile}
+                echo "PC1功能禁用! 等待$((checkTimer * disableWaiteRound))分钟" >> ${logFile}
                 sleep $((checkTimer * disableWaiteRound))m
             fi
         elif [ ${p1_running_count} -lt ${pc1_limit} ]
         then
             lotus-worker tasks enable PC1
-            echo "PC1 enabled!" >> ${logFile}
+            echo "PC1功能恢复!" >> ${logFile}
         fi
 
         sleep ${checkTimer}m
