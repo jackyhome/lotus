@@ -22,7 +22,7 @@ function start_check() {
             inPreArray=$(echo ${pre_pc1_array[@]} | grep -o "$sectorId" | wc -w)
             if [ $inPreArray -eq 0 ] ; then
                 echo "发现新扇区: $sectorId, PC1暂停${disableWaiteRound}轮..." >> ${logFile}
-                pre_pc1_array=$cur_pc1_array
+                pre_pc1_array=( $(find ${LOTUS_WORKER_PATH}/cache -maxdepth 1 -name s-t* |awk -F'/' '{print  $4 }') )
                 lotus-worker tasks disable PC1
                 sleep $((checkTimer * disableWaiteRound))m
                 break
