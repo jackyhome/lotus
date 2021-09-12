@@ -7,7 +7,7 @@ fn_check_p2="sc-02-data-tree-c-0.dat"
 
 function start_check() {
     pc1_limit=$pc1Limit
-    pre_pc1_num=0
+    pre_pc1_array=( $(find ${LOTUS_WORKER_PATH}/cache -maxdepth 1 -name s-t* |awk -F'/' '{print  $4 }') )
     for ((i=1; i > 0; i++))
     do
         taskList=`lotus-worker info |grep Task`
@@ -16,23 +16,18 @@ function start_check() {
         p2_count=`find ${LOTUS_WORKER_PATH}/cache -name ${fn_check_p2} |wc -l`
         p1_running_count=$(expr ${p1_count} - ${p2_count})
 
-        if [[ ${pre_pc1_num} -eq 0 ]]
-        then
-            pre_pc1_num=$p1_running_count
-        fi
-
-        if [[ ${pre_pc1_num} -lt ${p1_running_count} ]]
-        then
-            lotus-worker tasks disable PC1
-            pre_pc1_num=$p1_running_count
-            echo "New PC1 running count: ${pre_pc1_num}, wait for ${disableWaiteRound} round..." >> ${logFile}
-            sleep $((checkTimer * disableWaiteRound))m
-            if [[ ${p1_running_count} -lt ${pc1_limit} ]]
-            then
-                lotus-worker tasks enable PC1
-                echo "Enable PC1 again..." >> ${logFile}
+        cur_pc1_array=( $(find ${LOTUS_WORKER_PATH}/cache -maxdepth 1 -name s-t* |awk -F'/' '{print  $4 }') )
+        for sectorId in "${cur_pc1_array[@]}"
+        do
+            inPreArray=$(echo ${pre_pc1_array[@]} | grep -o "$sectorId" | wc -w)
+            if [ $inPreArray -eq 0 ] ; then
+                echo "Found new Sector: $sectorId, task will be disabled for ${disableWaiteRound} round..." >> ${logFile}
+                pre_pc1_array=$cur_pc1_array
+                lotus-worker tasks disable PC1
+                sleep $((checkTimer * disableWaiteRound))m
+                break
             fi
-        fi
+        done
 
         echo "[PC1] running count: ${p1_running_count}, [PC2] running count: ${p2_count}" >> ${logFile}
 
