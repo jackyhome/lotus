@@ -39,6 +39,7 @@ func (a *activeResources) add(wr storiface.WorkerResources, r Resources, tt seal
 		a.assignedTasks = make(map[sealtasks.TaskType]int)
 	}
 	a.assignedTasks[tt] += 1
+	log.Debugf("sched: Add assigned task to %s, total: %d", tt.Short(), a.assignedTasks[tt])
 }
 
 func (a *activeResources) free(wr storiface.WorkerResources, r Resources, tt sealtasks.TaskType) {
@@ -51,6 +52,7 @@ func (a *activeResources) free(wr storiface.WorkerResources, r Resources, tt sea
 	_, ok := a.assignedTasks[tt]
 	if ok && a.assignedTasks[tt] > 0 {
 		a.assignedTasks[tt]--
+		log.Debugf("sched: Remove assigned task for %s, total: %d", tt.Short(), a.assignedTasks[tt])
 	}
 }
 
@@ -63,7 +65,7 @@ func (a *activeResources) canHandleRequest(needRes Resources, wid WorkerID, call
 	}
 
 	// Add logic to limit task in worker, currently only needed for PC1
-	if tt == sealtasks.TTPreCommit1 && a.assignedTasks[tt] >= info.MaxPc1Task {
+	if tt.Short() == sealtasks.TTPreCommit1.Short() && a.assignedTasks[tt] >= info.MaxPc1Task {
 		log.Debugf("sched: Max PC1 limited (%d) reached for worker %s.", info.MaxPc1Task, wid)
 		return false
 	}
