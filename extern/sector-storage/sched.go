@@ -54,6 +54,7 @@ type WorkerSelector interface {
 type scheduler struct {
 	workersLk sync.RWMutex
 	workers   map[WorkerID]*workerHandle
+	histories *histories
 
 	schedule       chan *workerRequest
 	windowRequests chan *schedWindowRequest
@@ -73,6 +74,10 @@ type scheduler struct {
 	testSync chan struct{} // used for testing
 }
 
+type histories struct {
+	history map[string]int
+	max     int
+}
 type workerHandle struct {
 	workerRpc Worker
 
@@ -145,6 +150,10 @@ type workerResponse struct {
 func newScheduler() *scheduler {
 	return &scheduler{
 		workers: map[WorkerID]*workerHandle{},
+		histories: &histories{
+			history: map[string]int{},
+			max:     0,
+		},
 
 		schedule:       make(chan *workerRequest),
 		windowRequests: make(chan *schedWindowRequest, 20),
@@ -433,6 +442,13 @@ func (sh *scheduler) trySched() {
 				wi := sh.workers[wii]
 				wj := sh.workers[wji]
 
+				historyi := sh.histories.history[wii.String()+task.taskType.Short()]
+				historyj := sh.histories.history[wji.String()+task.taskType.Short()]
+				if historyi != historyj {
+					log.Debugf("jacky: %d with higher priority against %d", wii.String(), wji.String())
+					return historyi < historyj
+				}
+
 				rpcCtx, cancel := context.WithTimeout(task.ctx, SelectorTimeout)
 				defer cancel()
 
@@ -472,6 +488,7 @@ func (sh *scheduler) trySched() {
 
 			log.Debugf("SCHED ASSIGNED sqi:%d sector %d task %s to window %d", sqi, task.sector.ID.Number, task.taskType, wnd)
 
+			sh.increaseHistory(wid.String() + task.taskType.Short())
 			windows[wnd].allocated.add(info.Resources, needRes, task.taskType)
 			// TODO: We probably want to re-sort acceptableWindows here based on new
 			//  workerHandle.utilization + windows[wnd].allocated.utilization (workerHandle.utilization is used in all
@@ -534,6 +551,12 @@ func (sh *scheduler) trySched() {
 	}
 
 	sh.openWindows = newOpenWindows
+}
+
+func (sh *scheduler) increaseHistory(taskIdentifier string) {
+	sh.histories.max++
+	sh.histories.history[taskIdentifier] = sh.histories.max
+	log.Debugf("jacky: increasing for task: %d to %s", taskIdentifier, sh.histories.max)
 }
 
 func (sh *scheduler) schedClose() {
