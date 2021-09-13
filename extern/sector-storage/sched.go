@@ -442,11 +442,14 @@ func (sh *scheduler) trySched() {
 				wi := sh.workers[wii]
 				wj := sh.workers[wji]
 
-				historyi := sh.histories.history[wii.String()+task.taskType.Short()]
-				historyj := sh.histories.history[wji.String()+task.taskType.Short()]
-				if historyi != historyj {
-					log.Debugf("jacky: %d with higher priority against %d", wii.String(), wji.String())
-					return historyi < historyj
+				if task.taskType.Short() == sealtasks.TTPreCommit1.Short() { //Only apply for PC1
+					log.Debugf("jacky: compare history size for PC1")
+					historyi := sh.histories.history[wii.String()+task.taskType.Short()]
+					historyj := sh.histories.history[wji.String()+task.taskType.Short()]
+					if historyi != historyj {
+						log.Debugf("jacky: %d with higher priority against %d", wii.String(), wji.String())
+						return historyi < historyj
+					}
 				}
 
 				rpcCtx, cancel := context.WithTimeout(task.ctx, SelectorTimeout)
