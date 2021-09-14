@@ -91,7 +91,8 @@ type workerHandle struct {
 	wndLk         sync.Mutex
 	activeWindows []*schedWindow
 
-	enabled bool
+	enabled       bool
+	assignedTasks map[sealtasks.TaskType]int
 
 	// for sync manager goroutine closing
 	cleanupStarted bool
@@ -117,12 +118,11 @@ type workerDisableReq struct {
 }
 
 type activeResources struct {
-	memUsedMin    uint64
-	memUsedMax    uint64
-	gpuUsed       bool
-	cpuUse        uint64
-	assignedTasks map[sealtasks.TaskType]int
-	cond          *sync.Cond
+	memUsedMin uint64
+	memUsedMax uint64
+	gpuUsed    bool
+	cpuUse     uint64
+	cond       *sync.Cond
 }
 
 type workerRequest struct {
@@ -339,18 +339,18 @@ func (sh *scheduler) diag() SchedDiagInfo {
 
 func (sh *scheduler) trySched() {
 	/*
-		This assigns tasks to workers based on:
-		- Task priority (achieved by handling sh.schedQueue in order, since it's already sorted by priority)
-		- Worker resource availability
-		- Task-specified worker preference (acceptableWindows array below sorted by this preference)
-		- Window request age
+	   This assigns tasks to workers based on:
+	   - Task priority (achieved by handling sh.schedQueue in order, since it's already sorted by priority)
+	   - Worker resource availability
+	   - Task-specified worker preference (acceptableWindows array below sorted by this preference)
+	   - Window request age
 
-		1. For each task in the schedQueue find windows which can handle them
-		1.1. Create list of windows capable of handling a task
-		1.2. Sort windows according to task selector preferences
-		2. Going through schedQueue again, assign task to first acceptable window
-		   with resources available
-		3. Submit windows with scheduled tasks to workers
+	   1. For each task in the schedQueue find windows which can handle them
+	   1.1. Create list of windows capable of handling a task
+	   1.2. Sort windows according to task selector preferences
+	   2. Going through schedQueue again, assign task to first acceptable window
+	      with resources available
+	   3. Submit windows with scheduled tasks to workers
 
 	*/
 
@@ -402,8 +402,19 @@ func (sh *scheduler) trySched() {
 				}
 				//wt := sh.workTracker
 
+				// Add logic to limit task in worker, currently only needed for PC1
+				tt := task.taskType
+				pc1max := worker.info.MaxPc1Task
+				if tt.Short() == sealtasks.TTPreCommit1.Short() {
+					log.Debugf("jacky: Additional check for PC1 limit(%d) reached for worker %s.", pc1max, worker.info.Hostname)
+					if pc1max > 0 && worker.assignedTasks[tt] > pc1max {
+						log.Debugf("jacky: Max PC1 limited (%d) reached for worker %s.", pc1max, worker.info.Hostname)
+						continue
+					}
+				}
+
 				// TODO: allow bigger windows
-				if !windows[wnd].allocated.canHandleRequest(needRes, windowRequest.worker, "schedAcceptable", worker.info, task.taskType) {
+				if !windows[wnd].allocated.canHandleRequest(needRes, windowRequest.worker, "schedAcceptable", worker.info) {
 					continue
 				}
 
@@ -442,12 +453,14 @@ func (sh *scheduler) trySched() {
 				wi := sh.workers[wii]
 				wj := sh.workers[wji]
 
-				if task.taskType.Short() == sealtasks.TTPreCommit1.Short() { //Only apply for PC1
-					log.Debugf("jacky: compare history size for PC1")
-					historyi := sh.histories.history[wii.String()+task.taskType.Short()]
-					historyj := sh.histories.history[wji.String()+task.taskType.Short()]
+				ttype := task.taskType.Short()
+				if ttype == sealtasks.TTPreCommit1.Short() { //Only apply for PC1
+					identifieri := wii.String() + "-" + wi.info.Hostname + "-" + ttype
+					identifierj := wji.String() + "-" + wj.info.Hostname + "-" + ttype
+					historyi := sh.histories.history[identifieri]
+					historyj := sh.histories.history[identifierj]
+					log.Debugf("jacky: Compare priority between: %s(%d) and %s(%d)", identifieri, historyi, identifierj, historyj)
 					if historyi != historyj {
-						log.Debugf("jacky: %d with higher priority against %d", wii.String(), wji.String())
 						return historyi < historyj
 					}
 				}
@@ -482,17 +495,20 @@ func (sh *scheduler) trySched() {
 			wid := sh.openWindows[wnd].worker
 			info := sh.workers[wid].info
 
-			log.Debugf("SCHED try assign sqi:%d sector %d to window %d", sqi, task.sector.ID.Number, wnd)
+			log.Debugf("SCHED try assign sqi:%d sector %d to window %d, %s", sqi, task.sector.ID.Number, wnd, info.Hostname)
 
 			// TODO: allow bigger windows
-			if !windows[wnd].allocated.canHandleRequest(needRes, wid, "schedAssign", info, task.taskType) {
+			if !windows[wnd].allocated.canHandleRequest(needRes, wid, "schedAssign", info) {
 				continue
 			}
 
-			log.Debugf("SCHED ASSIGNED sqi:%d sector %d task %s to window %d", sqi, task.sector.ID.Number, task.taskType, wnd)
+			log.Debugf("SCHED ASSIGNED sqi:%d sector %d task %s to window %d, %s", sqi, task.sector.ID.Number, task.taskType, wnd, info.Hostname)
 
-			sh.increaseHistory(wid.String() + task.taskType.Short())
-			windows[wnd].allocated.add(info.Resources, needRes, task.taskType)
+			if task.taskType.Short() == sealtasks.TTPreCommit1.Short() {
+				log.Debugf("jacky: PC1 handling for worker: %s", info.Hostname)
+				sh.jzTaskAssigned(wid, task.taskType)
+			}
+			windows[wnd].allocated.add(info.Resources, needRes)
 			// TODO: We probably want to re-sort acceptableWindows here based on new
 			//  workerHandle.utilization + windows[wnd].allocated.utilization (workerHandle.utilization is used in all
 			//  task selectors, but not in the same way, so need to figure out how to do that in a non-O(n^2 way), and
@@ -556,10 +572,36 @@ func (sh *scheduler) trySched() {
 	sh.openWindows = newOpenWindows
 }
 
-func (sh *scheduler) increaseHistory(taskIdentifier string) {
+func (sh *scheduler) jzTaskAssigned(wid WorkerID, taskType sealtasks.TaskType) {
+	worker := sh.workers[wid]
+	sh.workersLk.Lock()
+	_, ok := worker.assignedTasks[taskType]
+	if !ok {
+		log.Debug("jacky: init worker assigned tasks")
+		worker.assignedTasks = make(map[sealtasks.TaskType]int)
+	}
+	worker.assignedTasks[taskType]++
+	sh.workersLk.Unlock()
 	sh.histories.max++
+	hostName := worker.info.Hostname
+	taskIdentifier := wid.String() + "-" + hostName + "-" + taskType.Short()
 	sh.histories.history[taskIdentifier] = sh.histories.max
-	log.Debugf("jacky: increasing for task: %d to %s", taskIdentifier, sh.histories.max)
+	log.Debugf("jacky: increasing for task: %s to %d, active: %d", taskIdentifier, sh.histories.max, worker.assignedTasks[taskType])
+}
+
+func (sh *scheduler) jzTaskCompleted(wid WorkerID, taskType sealtasks.TaskType) {
+	worker := sh.workers[wid]
+	csize, ok := worker.assignedTasks[taskType]
+	if !ok {
+		log.Warn("jacky: Should not be the case here.")
+		worker.assignedTasks = make(map[sealtasks.TaskType]int)
+	}
+	if csize > 0 {
+		worker.assignedTasks[taskType]--
+	}
+	hostName := worker.info.Hostname
+	taskIdentifier := wid.String() + "-" + hostName + "-" + taskType.Short()
+	log.Debugf("jacky: end processing for task: %s, active: %d", taskIdentifier, worker.assignedTasks[taskType])
 }
 
 func (sh *scheduler) schedClose() {

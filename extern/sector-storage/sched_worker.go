@@ -296,14 +296,14 @@ func (sw *schedWorker) workerCompactWindows() {
 
 			for ti, todo := range window.todo {
 				needRes := ResourceTable[todo.taskType][todo.sector.ProofType]
-				if !lower.allocated.canHandleRequest(needRes, sw.wid, "compactWindows", worker.info, todo.taskType) {
+				if !lower.allocated.canHandleRequest(needRes, sw.wid, "compactWindows", worker.info) {
 					continue
 				}
 
 				moved = append(moved, ti)
 				lower.todo = append(lower.todo, todo)
-				lower.allocated.add(worker.info.Resources, needRes, todo.taskType)
-				window.allocated.free(worker.info.Resources, needRes, todo.taskType)
+				lower.allocated.add(worker.info.Resources, needRes)
+				window.allocated.free(worker.info.Resources, needRes)
 			}
 
 			if len(moved) > 0 {
@@ -352,7 +352,7 @@ assignLoop:
 			worker.lk.Lock()
 			for t, todo := range firstWindow.todo {
 				needRes := ResourceTable[todo.taskType][todo.sector.ProofType]
-				if worker.preparing.canHandleRequest(needRes, sw.wid, "startPreparing", worker.info, todo.taskType) {
+				if worker.preparing.canHandleRequest(needRes, sw.wid, "startPreparing", worker.info) {
 					tidx = t
 					break
 				}
@@ -393,7 +393,7 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, req *workerRe
 	needRes := ResourceTable[req.taskType][req.sector.ProofType]
 
 	w.lk.Lock()
-	w.preparing.add(w.info.Resources, needRes, req.taskType)
+	w.preparing.add(w.info.Resources, needRes)
 	w.lk.Unlock()
 
 	go func() {
@@ -403,7 +403,7 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, req *workerRe
 
 		if err != nil {
 			w.lk.Lock()
-			w.preparing.free(w.info.Resources, needRes, req.taskType)
+			w.preparing.free(w.info.Resources, needRes)
 			w.lk.Unlock()
 			sh.workersLk.Unlock()
 
@@ -424,9 +424,9 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, req *workerRe
 		}
 
 		// wait (if needed) for resources in the 'active' window
-		err = w.active.withResources(sw.wid, w.info, needRes, &sh.workersLk, req.taskType, func() error {
+		err = w.active.withResources(sw.wid, w.info, needRes, &sh.workersLk, func() error {
 			w.lk.Lock()
-			w.preparing.free(w.info.Resources, needRes, req.taskType)
+			w.preparing.free(w.info.Resources, needRes)
 			w.lk.Unlock()
 			sh.workersLk.Unlock()
 			defer sh.workersLk.Lock() // we MUST return locked from this function
@@ -449,6 +449,8 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, req *workerRe
 
 			return nil
 		})
+
+		sh.jzTaskCompleted(sw.wid, req.taskType)
 
 		sh.workersLk.Unlock()
 
