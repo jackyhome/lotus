@@ -109,6 +109,8 @@ type SealerConfig struct {
 	AllowCommit     bool
 	AllowUnseal     bool
 
+	BindPreCommit bool
+	RobinTasks    []string
 	// ResourceFiltering instructs the system which resource filtering strategy
 	// to use when evaluating tasks against this worker. An empty value defaults
 	// to "hardware".
@@ -133,7 +135,7 @@ func New(ctx context.Context, lstor *stores.Local, stor *stores.Remote, ls store
 		remoteHnd:  &stores.FetchHandler{Local: lstor, PfHandler: &stores.DefaultPartialFileHandler{}},
 		index:      si,
 
-		sched: newScheduler(),
+		sched: newScheduler(sc),
 
 		Prover: prover,
 
