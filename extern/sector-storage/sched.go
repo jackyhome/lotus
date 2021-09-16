@@ -96,8 +96,7 @@ type workerHandle struct {
 	taskLk        sync.Mutex
 	activeWindows []*schedWindow
 
-	enabled       bool
-	assignedTasks map[sealtasks.TaskType]int
+	enabled bool
 
 	// for sync manager goroutine closing
 	cleanupStarted bool
@@ -593,6 +592,9 @@ func (sh *scheduler) jzGetTasksAssigned(wid WorkerID, taskType sealtasks.TaskTyp
 	return sh.activeTasks[taskId]
 }
 func (sh *scheduler) jzTaskAssigned(wid WorkerID, taskType sealtasks.TaskType) {
+	if taskType.Short() != sealtasks.TTPreCommit1.Short() && sh.robinTasks[taskType.Short()] == 0 {
+		return
+	}
 	worker := sh.workers[wid]
 	hostName := worker.info.Hostname
 	taskIdentifier := wid.String() + "-" + hostName + "-" + taskType.Short()
@@ -607,6 +609,9 @@ func (sh *scheduler) jzTaskAssigned(wid WorkerID, taskType sealtasks.TaskType) {
 }
 
 func (sh *scheduler) jzTaskCompleted(wid WorkerID, taskType sealtasks.TaskType) {
+	if taskType.Short() != sealtasks.TTPreCommit1.Short() && sh.robinTasks[taskType.Short()] == 0 {
+		return
+	}
 	worker := sh.workers[wid]
 	hostName := worker.info.Hostname
 	taskIdentifier := wid.String() + "-" + hostName + "-" + taskType.Short()

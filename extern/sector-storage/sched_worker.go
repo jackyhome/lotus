@@ -6,7 +6,6 @@ import (
 
 	"golang.org/x/xerrors"
 
-	sealtasks "github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
 	"github.com/filecoin-project/lotus/extern/sector-storage/stores"
 )
 
@@ -39,9 +38,8 @@ func (sh *scheduler) runWorker(ctx context.Context, w Worker) error {
 	}
 
 	worker := &workerHandle{
-		workerRpc:     w,
-		info:          info,
-		assignedTasks: map[sealtasks.TaskType]int{},
+		workerRpc: w,
+		info:      info,
 
 		preparing: &activeResources{},
 		active:    &activeResources{},
