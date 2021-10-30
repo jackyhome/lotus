@@ -15,6 +15,7 @@ import (
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
 	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
 
 	"github.com/filecoin-project/lotus/chain/types"
@@ -88,6 +89,16 @@ var sealingWorkersCmd = &cli.Command{
 			}
 
 			fmt.Printf("Worker %s, host %s%s\n", stat.id, color.MagentaString(stat.Info.Hostname), disabled)
+
+			fmt.Printf("Task types: ")
+			for tt := range stat.Info.TasksEnabled {
+				if tt == sealtasks.TTPreCommit1 {
+					fmt.Printf(" %s(Max Limit: %d),", tt.Short(), stat.Info.MaxPc1Task)
+				} else {
+					fmt.Printf(" %s,", tt.Short())
+				}
+			}
+			fmt.Print("\n")
 
 			var barCols = uint64(64)
 			cpuBars := int(stat.CpuUse * barCols / stat.Info.Resources.CPUs)

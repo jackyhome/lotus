@@ -179,7 +179,7 @@ func addTestWorker(t *testing.T, sched *scheduler, index *stores.Index, name str
 }
 
 func TestSchedStartStop(t *testing.T) {
-	sched := newScheduler()
+	sched := newScheduler(SealerConfig{RobinTasks: []string{sealtasks.TTPreCommit1.Short()}})
 	go sched.runSched()
 
 	addTestWorker(t, sched, stores.NewIndex(), "fred", nil, decentWorkerResources, false)
@@ -305,7 +305,7 @@ func TestSched(t *testing.T) {
 		return func(t *testing.T) {
 			index := stores.NewIndex()
 
-			sched := newScheduler()
+			sched := newScheduler(SealerConfig{RobinTasks: []string{sealtasks.TTPreCommit1.Short()}})
 			sched.testSync = make(chan struct{})
 
 			go sched.runSched()
@@ -557,7 +557,7 @@ func BenchmarkTrySched(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				b.StopTimer()
 
-				sched := newScheduler()
+				sched := newScheduler(SealerConfig{RobinTasks: []string{sealtasks.TTPreCommit1.Short()}})
 				sched.workers[WorkerID{}] = &workerHandle{
 					workerRpc: nil,
 					info: storiface.WorkerInfo{

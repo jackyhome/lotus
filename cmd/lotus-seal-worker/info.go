@@ -65,6 +65,10 @@ var infoCmd = &cli.Command{
 		for _, t := range ttList(tt) {
 			fmt.Printf("%s ", t.Short())
 		}
+		_, pc1ok := tt[sealtasks.TTPreCommit1]
+		if pc1ok {
+			fmt.Printf("\nPC1 Limit: %d.", info.MaxPc1Task)
+		}
 		fmt.Println()
 
 		fmt.Println()

@@ -167,6 +167,11 @@ var runCmd = &cli.Command{
 			Usage: "maximum fetch operations to run in parallel",
 			Value: 5,
 		},
+		&cli.IntFlag{
+			Name:  "pc1-limit",
+			Usage: "PC1 task limit",
+			Value: 15,
+		},
 		&cli.StringFlag{
 			Name:  "timeout",
 			Usage: "used when 'listen' is unspecified. must be a valid duration recognized by golang's time.ParseDuration function",
@@ -271,6 +276,10 @@ var runCmd = &cli.Command{
 		if len(taskTypes) == 0 {
 			return xerrors.Errorf("no task types specified")
 		}
+		pc1Limit := cctx.Int("pc1-limit")
+		if pc1Limit < 1 {
+			pc1Limit = 20 //set default pc1 limit value to 20 if not provided
+		}
 
 		// Open repo
 
@@ -365,7 +374,12 @@ var runCmd = &cli.Command{
 				address = rip + ":" + addressSlice[1]
 			}
 		}
-
+		lPort := addressSlice[1]
+		hostName, err := os.Hostname()
+		if err != nil {
+			return xerrors.Errorf("could not get host info: %w", err)
+		}
+		workerName := hostName + "-" + lPort
 		localStore, err := stores.NewLocal(ctx, lr, nodeApi, []string{"http://" + address + "/remote"})
 		if err != nil {
 			return err
@@ -397,8 +411,10 @@ var runCmd = &cli.Command{
 
 		workerApi := &worker{
 			LocalWorker: sectorstorage.NewLocalWorker(sectorstorage.WorkerConfig{
-				TaskTypes: taskTypes,
-				NoSwap:    cctx.Bool("no-swap"),
+				TaskTypes:  taskTypes,
+				NoSwap:     cctx.Bool("no-swap"),
+				MaxPc1Task: pc1Limit,
+				WorkerName: workerName,
 			}, remote, localStore, nodeApi, nodeApi, wsts),
 			localStore: localStore,
 			ls:         lr,

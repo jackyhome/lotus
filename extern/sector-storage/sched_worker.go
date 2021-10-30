@@ -525,6 +525,8 @@ func (sw *schedWorker) startProcessingTask(req *workerRequest) error {
 			return nil
 		})
 
+		sh.jzTaskCompleted(sw.wid, req.taskType)
+
 		w.lk.Unlock()
 
 		// This error should always be nil, since nothing is setting it, but just to be safe:

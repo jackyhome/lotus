@@ -16,7 +16,9 @@ import (
 )
 
 type WorkerInfo struct {
-	Hostname string
+	Hostname     string
+	MaxPc1Task   int
+	TasksEnabled map[sealtasks.TaskType]struct{}
 
 	// IgnoreResources indicates whether the worker's available resources should
 	// be used ignored (true) or used (false) for the purposes of scheduling and
