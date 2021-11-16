@@ -15,7 +15,6 @@ import (
 	"github.com/filecoin-project/go-bitfield"
 	"github.com/google/uuid"
 	"github.com/ipfs/go-cid"
-	"github.com/ipfs/go-filestore"
 	"github.com/libp2p/go-libp2p-core/metrics"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -24,9 +23,10 @@ import (
 	"github.com/multiformats/go-multiaddr"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	filestore2 "github.com/filecoin-project/go-fil-markets/filestore"
+	filestore "github.com/filecoin-project/go-fil-markets/filestore"
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	"github.com/filecoin-project/go-jsonrpc/auth"
+	textselector "github.com/ipld/go-ipld-selector-text-lite"
 
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/crypto"
@@ -90,6 +90,7 @@ func init() {
 	addExample(&pid)
 
 	storeIDExample := imports.ID(50)
+	textSelExample := textselector.Expression("Links/21/Hash/Links/42/Hash")
 
 	addExample(bitfield.NewFromSet([]uint64{5}))
 	addExample(abi.RegisteredSealProof_StackedDrg32GiBV1_1)
@@ -108,7 +109,6 @@ func init() {
 	addExample(abi.UnpaddedPieceSize(1024))
 	addExample(abi.UnpaddedPieceSize(1024).Padded())
 	addExample(abi.DealID(5432))
-	addExample(filestore.StatusFileChanged)
 	addExample(abi.SectorNumber(9))
 	addExample(abi.SectorSize(32 * 1024 * 1024 * 1024))
 	addExample(api.MpoolChange(0))
@@ -124,6 +124,7 @@ func init() {
 	addExample(&storeIDExample)
 	addExample(retrievalmarket.ClientEventDealAccepted)
 	addExample(retrievalmarket.DealStatusNew)
+	addExample(&textSelExample)
 	addExample(network.ReachabilityPublic)
 	addExample(build.NewestNetworkVersion)
 	addExample(map[string]int{"name": 42})
@@ -175,7 +176,7 @@ func init() {
 	ExampleValues[reflect.TypeOf(struct{ A multiaddr.Multiaddr }{}).Field(0).Type] = maddr
 
 	// miner specific
-	addExample(filestore2.Path(".lotusminer/fstmp123"))
+	addExample(filestore.Path(".lotusminer/fstmp123"))
 	si := uint64(12)
 	addExample(&si)
 	addExample(retrievalmarket.DealID(5))
