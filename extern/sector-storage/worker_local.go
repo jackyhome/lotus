@@ -45,6 +45,7 @@ type WorkerConfig struct {
 
 // used do provide custom proofs impl (mostly used in testing)
 type ExecutorFunc func() (ffiwrapper.Storage, error)
+type EnvFunc func(string) (string, bool)
 
 type LocalWorker struct {
 	storage    stores.Store
@@ -53,6 +54,7 @@ type LocalWorker struct {
 	ret        storiface.WorkerReturn
 	executor   ExecutorFunc
 	noSwap     bool
+	envLookup  EnvFunc
 
 	pc1Limit   int
 	workerName string
@@ -69,7 +71,7 @@ type LocalWorker struct {
 	closing     chan struct{}
 }
 
-func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, store stores.Store, local *stores.Local, sindex stores.SectorIndex, ret storiface.WorkerReturn, cst *statestore.StateStore) *LocalWorker {
+func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, envLookup EnvFunc, store stores.Store, local *stores.Local, sindex stores.SectorIndex, ret storiface.WorkerReturn, cst *statestore.StateStore) *LocalWorker {
 	acceptTasks := map[sealtasks.TaskType]struct{}{}
 	for _, taskType := range wcfg.TaskTypes {
 		acceptTasks[taskType] = struct{}{}
@@ -89,6 +91,7 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, store stores.Store
 		noSwap:          wcfg.NoSwap,
 		pc1Limit:        wcfg.MaxPc1Task,
 		workerName:      wcfg.WorkerName,
+		envLookup:       envLookup,
 		ignoreResources: wcfg.IgnoreResourceFiltering,
 		session:         uuid.New(),
 		closing:         make(chan struct{}),
@@ -122,7 +125,7 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, store stores.Store
 }
 
 func NewLocalWorker(wcfg WorkerConfig, store stores.Store, local *stores.Local, sindex stores.SectorIndex, ret storiface.WorkerReturn, cst *statestore.StateStore) *LocalWorker {
-	return newLocalWorker(nil, wcfg, store, local, sindex, ret, cst)
+	return newLocalWorker(nil, wcfg, os.LookupEnv, store, local, sindex, ret, cst)
 }
 
 type localWorkerPathProvider struct {
@@ -489,6 +492,52 @@ func (l *LocalWorker) Paths(ctx context.Context) ([]stores.StoragePath, error) {
 	return l.localStore.Local(ctx)
 }
 
+func (l *LocalWorker) memInfo() (memPhysical, memUsed, memSwap, memSwapUsed uint64, err error) {
+	h, err := sysinfo.Host()
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+
+	mem, err := h.Memory()
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+	memPhysical = mem.Total
+	// mem.Available is memory available without swapping, it is more relevant for this calculation
+	memUsed = mem.Total - mem.Available
+	memSwap = mem.VirtualTotal
+	memSwapUsed = mem.VirtualUsed
+
+	if cgMemMax, cgMemUsed, cgSwapMax, cgSwapUsed, err := cgroupV1Mem(); err == nil {
+		if cgMemMax > 0 && cgMemMax < memPhysical {
+			memPhysical = cgMemMax
+			memUsed = cgMemUsed
+		}
+		if cgSwapMax > 0 && cgSwapMax < memSwap {
+			memSwap = cgSwapMax
+			memSwapUsed = cgSwapUsed
+		}
+	}
+
+	if cgMemMax, cgMemUsed, cgSwapMax, cgSwapUsed, err := cgroupV2Mem(); err == nil {
+		if cgMemMax > 0 && cgMemMax < memPhysical {
+			memPhysical = cgMemMax
+			memUsed = cgMemUsed
+		}
+		if cgSwapMax > 0 && cgSwapMax < memSwap {
+			memSwap = cgSwapMax
+			memSwapUsed = cgSwapUsed
+		}
+	}
+
+	if l.noSwap {
+		memSwap = 0
+		memSwapUsed = 0
+	}
+
+	return memPhysical, memUsed, memSwap, memSwapUsed, nil
+}
+
 func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 	if l.workerName == "" {
 		hostname, err := os.Hostname() // TODO: allow overriding from config
@@ -503,19 +552,16 @@ func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 		log.Errorf("getting gpu devices failed: %+v", err)
 	}
 
-	h, err := sysinfo.Host()
-	if err != nil {
-		return storiface.WorkerInfo{}, xerrors.Errorf("getting host info: %w", err)
-	}
-
-	mem, err := h.Memory()
+	memPhysical, memUsed, memSwap, memSwapUsed, err := l.memInfo()
 	if err != nil {
 		return storiface.WorkerInfo{}, xerrors.Errorf("getting memory info: %w", err)
 	}
 
-	memSwap := mem.VirtualTotal
-	if l.noSwap {
-		memSwap = 0
+	resEnv, err := storiface.ParseResourceEnv(func(key, def string) (string, bool) {
+		return l.envLookup(key)
+	})
+	if err != nil {
+		return storiface.WorkerInfo{}, xerrors.Errorf("interpreting resource env vars: %w", err)
 	}
 
 	return storiface.WorkerInfo{
@@ -524,11 +570,13 @@ func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 		TasksEnabled:    l.acceptTasks,
 		IgnoreResources: l.ignoreResources,
 		Resources: storiface.WorkerResources{
-			MemPhysical: mem.Total,
+			MemPhysical: memPhysical,
+			MemUsed:     memUsed,
 			MemSwap:     memSwap,
-			MemReserved: mem.VirtualUsed + mem.Total - mem.Available, // TODO: sub this process
+			MemSwapUsed: memSwapUsed,
 			CPUs:        uint64(runtime.NumCPU()),
 			GPUs:        gpus,
+			Resources:   resEnv,
 		},
 	}, nil
 }
