@@ -586,7 +586,7 @@ func (sh *scheduler) trySched() {
 	sh.openWindows = newOpenWindows
 }
 
-func (sh *scheduler) jzGetTasksAssigned(wid WorkerID, taskType sealtasks.TaskType) int {
+func (sh *scheduler) jzGetTasksAssigned(wid storiface.WorkerID, taskType sealtasks.TaskType) int {
 	worker := sh.workers[wid]
 	hostName := worker.info.Hostname
 	taskId := wid.String() + "-" + hostName + "-" + taskType.Short()
@@ -594,7 +594,7 @@ func (sh *scheduler) jzGetTasksAssigned(wid WorkerID, taskType sealtasks.TaskTyp
 	defer sh.taskLk.Unlock()
 	return sh.activeTasks[taskId]
 }
-func (sh *scheduler) jzTaskAssigned(wid WorkerID, taskType sealtasks.TaskType) {
+func (sh *scheduler) jzTaskAssigned(wid storiface.WorkerID, taskType sealtasks.TaskType) {
 	if taskType.Short() != sealtasks.TTPreCommit1.Short() && sh.robinTasks[taskType.Short()] == 0 {
 		return
 	}
@@ -611,7 +611,7 @@ func (sh *scheduler) jzTaskAssigned(wid WorkerID, taskType sealtasks.TaskType) {
 	log.Debugf("jacky: increasing for task: %s to %d, active: %d", taskIdentifier, sh.histories.max, tc+1)
 }
 
-func (sh *scheduler) jzTaskCompleted(wid WorkerID, taskType sealtasks.TaskType) {
+func (sh *scheduler) jzTaskCompleted(wid storiface.WorkerID, taskType sealtasks.TaskType) {
 	if taskType.Short() != sealtasks.TTPreCommit1.Short() && sh.robinTasks[taskType.Short()] == 0 {
 		return
 	}
