@@ -115,7 +115,7 @@ func newTestMgr(ctx context.Context, t *testing.T, ds datastore.Datastore) (*Man
 		remoteHnd:  &stores.FetchHandler{Local: lstor},
 		index:      si,
 
-		sched: newScheduler(),
+		sched: newScheduler(SealerConfig{}),
 
 		Prover: prover,
 
