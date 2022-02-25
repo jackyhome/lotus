@@ -16,6 +16,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/policy"
 	"github.com/filecoin-project/lotus/chain/types"
 	sectorstorage "github.com/filecoin-project/lotus/extern/sector-storage"
+	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
 )
 
 const (
@@ -141,6 +142,8 @@ func DefaultStorageMiner() *StorageMiner {
 			AllowProveReplicaUpdate2: true,
 			AllowRegenSectorKey:      true,
 
+			BindPreCommit: true,
+			RobinTasks:    []string{sealtasks.TTPreCommit1.Short()},
 			// Default to 10 - tcp should still be able to figure this out, and
 			// it's the ratio between 10gbit / 1gbit
 			ParallelFetchLimit: 10,

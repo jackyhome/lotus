@@ -1,8 +1,35 @@
-<p align="center">
-  <a href="https://docs.filecoin.io/" title="Filecoin Docs">
-    <img src="documentation/images/lotus_logo_h.png" alt="Project Lotus Logo" width="244" />
-  </a>
-</p>
+<h1>基于lotus的小改动^_^</h1>
+
+## PC1与PC2绑定
+注意绑定后PC2只会与PC1在同一个worker处理，也不会处理其他worker的PC1
+
+## PC2的CPU用量调整
+调整PC2的CPU用量为所有CPU个数的70%
+
+## PC1个数限制，启动lotus-worker时加上--pc1-limit参数
+```shell
+./lotus-worker run --pc1-limit=15 --listen.....
+```
+编译脚本build-lotus.sh
+```shell
+./build-lotus.sh
+```
+<h2>欢迎打赏：</h2>
+  <p>FIL地址：09f7463930d100d1bbc490a450adf4aaa14ed5e37858e82479fa39db99dd01d7</p>
+  <div>
+  <table border=0>
+    <tr>
+      <td>
+        <img src="documentation/images/my_wallet.png" alt="FIL" width="120"/>
+      </td>
+      <td style="vertical-align: top;">
+        微信地址：
+      </td>
+      <td>
+        <img src="documentation/images/my_wechat.png" alt="个人微信" width="120" style="padding-left:20px"/>
+      </td>
+    </tr>
+   </table>   
 
 <h1 align="center">Project Lotus - 莲</h1>
 

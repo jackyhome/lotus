@@ -57,8 +57,13 @@ func (r Resources) Threads(wcpus uint64, gpus int) uint64 {
 			return wcpus
 		}
 		return n
+	} else if mp > 1000 {
+		n := (wcpus * uint64(mp)) / (10000)
+		if n == 0 {
+			return wcpus
+		}
+		return n
 	}
-
 	return uint64(mp)
 }
 
@@ -152,7 +157,8 @@ var ResourceTable = map[sealtasks.TaskType]map[abi.RegisteredSealProof]Resources
 			MaxMemory: 30 << 30,
 			MinMemory: 30 << 30,
 
-			MaxParallelism:    -1,
+			MaxParallelism: 7000, //use percentage number * 100, Value should not less than 1000 here.
+
 			MaxParallelismGPU: 6,
 			GPUUtilization:    1.0,
 
@@ -162,7 +168,8 @@ var ResourceTable = map[sealtasks.TaskType]map[abi.RegisteredSealProof]Resources
 			MaxMemory: 15 << 30,
 			MinMemory: 15 << 30,
 
-			MaxParallelism:    -1,
+			MaxParallelism: 7000, //use percentage number * 100, Value should not less than 1000 here.
+
 			MaxParallelismGPU: 6,
 			GPUUtilization:    1.0,
 
@@ -172,7 +179,7 @@ var ResourceTable = map[sealtasks.TaskType]map[abi.RegisteredSealProof]Resources
 			MaxMemory: 3 << 29, // 1.5G
 			MinMemory: 1 << 30,
 
-			MaxParallelism: -1,
+			MaxParallelism: 20,
 
 			BaseMinMemory: 1 << 30,
 		},
@@ -180,7 +187,7 @@ var ResourceTable = map[sealtasks.TaskType]map[abi.RegisteredSealProof]Resources
 			MaxMemory: 2 << 10,
 			MinMemory: 2 << 10,
 
-			MaxParallelism: -1,
+			MaxParallelism: 2,
 
 			BaseMinMemory: 2 << 10,
 		},
@@ -188,7 +195,7 @@ var ResourceTable = map[sealtasks.TaskType]map[abi.RegisteredSealProof]Resources
 			MaxMemory: 8 << 20,
 			MinMemory: 8 << 20,
 
-			MaxParallelism: -1,
+			MaxParallelism: 15,
 
 			BaseMinMemory: 8 << 20,
 		},

@@ -36,6 +36,21 @@ var runCmd = &cli.Command{
 			Usage: "2345",
 		},
 		&cli.BoolFlag{
+			Name:  "wdpost",
+			Usage: "enable windowPoSt",
+			Value: true,
+		},
+		&cli.BoolFlag{
+			Name:  "wnpost",
+			Usage: "enable winningPoSt",
+			Value: true,
+		},
+		&cli.BoolFlag{
+			Name:  "p2p",
+			Usage: "enable P2P",
+			Value: true,
+		},
+		&cli.BoolFlag{
 			Name:  "enable-gpu-proving",
 			Usage: "enable use of GPU for mining operations",
 			Value: true,
@@ -56,6 +71,18 @@ var runCmd = &cli.Command{
 			if err != nil {
 				return err
 			}
+		}
+
+		if cctx.Bool("wdpost") {
+			os.Setenv("LOTUS_WDPOST", "true")
+		} else {
+			os.Unsetenv("LOTUS_WDPOST")
+		}
+
+		if cctx.Bool("wnpost") {
+			os.Setenv("LOTUS_WNPOST", "true")
+		} else {
+			os.Unsetenv("LOTUS_WNPOST")
 		}
 
 		ctx, _ := tag.New(lcli.DaemonContext(cctx),
@@ -163,7 +190,7 @@ var runCmd = &cli.Command{
 			return xerrors.Errorf("getting API endpoint: %w", err)
 		}
 
-		if bootstrapLibP2P {
+		if cctx.Bool("p2p") && bootstrapLibP2P {
 			log.Infof("Bootstrapping libp2p network with full node")
 
 			// Bootstrap with full node
